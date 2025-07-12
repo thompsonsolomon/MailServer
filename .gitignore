@@ -1,0 +1,49 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-error.log
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Build files
+dist/
+.vite/
+out/
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+key.json
+
+# Logs & debugging
+logs/
+*.log
+*.log.*
+debug.log
+
+# Editor & OS-specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.DS_Store
+Thumbs.db
+
+# Coverage & test files
+coverage/
+jest/
+cypress/videos/
+cypress/screenshots/
+
+# Firebase-specific files
+firebase-debug.log
+firebase.json
+
+# Miscellaneous
+*.bak
+*.tmp
