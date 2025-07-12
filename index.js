@@ -5,7 +5,6 @@ const nodemailer = require("nodemailer");
 const { BetaAnalyticsDataClient } = require("@google-analytics/data");
 const fetch = require("node-fetch");
 const fs = require("fs");
-const path = require("path");
 
 dotenv.config();
 
@@ -41,9 +40,9 @@ const contactEmail = nodemailer.createTransport({
 
 contactEmail.verify((error) => {
   if (error) {
-    console.error("Mail error:", error);
+    console.error("❌ Mailer error:", error);
   } else {
-    console.log("Mailer ready ✅");
+    console.log("✅ Nodemailer ready");
   }
 });
 
@@ -56,18 +55,20 @@ router.post("/contact", (req, res) => {
     from: name,
     to: process.env.EMAIL_USER,
     subject: "Contact Form Submission - Portfolio",
-    html: `<p><strong>Name:</strong> ${name}</p>
-           <p><strong>Email:</strong> ${email}</p>
-           <p><strong>Phone:</strong> ${phone}</p>
-           <p><strong>Message:</strong><br>${message}</p>`,
+    html: `
+      <p><strong>Name:</strong> ${name}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Phone:</strong> ${phone}</p>
+      <p><strong>Message:</strong><br>${message}</p>
+    `,
   };
 
   contactEmail.sendMail(mail, (error) => {
     if (error) {
-      console.error("Mail sending failed:", error);
+      console.error("❌ Mail sending failed:", error);
       res.status(500).json({ error: "Failed to send message" });
     } else {
-      console.log("Mail sent ✔");
+      console.log("✉️ Mail sent successfully");
       res.json({ code: 200, status: "Message Sent" });
     }
   });
@@ -75,79 +76,95 @@ router.post("/contact", (req, res) => {
 
 // ---------- ✅ Google Analytics API ----------
 
+const keyPath = "/etc/secrets/key.json"; // Adjust this to match your Render Secret File mount path
 let analyticsDataClient;
 
-if (process.env.GA_KEY_JSON) {
-  const key = JSON.parse(process.env.GA_KEY_JSON);
+if (fs.existsSync(keyPath)) {
+  try {
+    const key = JSON.parse(fs.readFileSync(keyPath, "utf8"));
 
-  analyticsDataClient = new BetaAnalyticsDataClient({
-    credentials: key,
-  });
+    analyticsDataClient = new BetaAnalyticsDataClient({
+      credentials: key,
+    });
 
-  router.get("/analytics", async (req, res) => {
-    try {
-      const [response] = await analyticsDataClient.runReport({
-        property: `properties/${process.env.GA_PROPERTY_ID}`,
-        dateRanges: [
-          {
-            startDate: "30daysAgo",
-            endDate: "today",
-          },
-        ],
-        metrics: [{ name: "activeUsers" }],
-        dimensions: [{ name: "date" }],
-      });
+    console.log("✅ Google Analytics client initialized");
 
-      const visitsOverTime =
-        response.rows?.map((row) => ({
-          date: row.dimensionValues[0].value,
-          visits: Number(row.metricValues[0].value),
-        })) || [];
+    router.get("/analytics", async (req, res) => {
+      try {
+        const [response] = await analyticsDataClient.runReport({
+          property: `properties/${process.env.GA_PROPERTY_ID}`,
+          dateRanges: [
+            {
+              startDate: "30daysAgo",
+              endDate: "today",
+            },
+          ],
+          metrics: [{ name: "activeUsers" }],
+          dimensions: [{ name: "date" }],
+        });
 
-      const totalVisitors = visitsOverTime.reduce(
-        (sum, item) => sum + item.visits,
-        0
-      );
+        const visitsOverTime =
+          response.rows?.map((row) => ({
+            date: row.dimensionValues[0].value,
+            visits: Number(row.metricValues[0].value),
+          })) || [];
 
-      res.json({
-        totalVisitors,
-        visitsOverTime,
-      });
-    } catch (error) {
-      console.error("Analytics error:", error);
-      res
-        .status(500)
-        .json({ error: "Error fetching analytics data", details: error.message });
-    }
-  });
+        const totalVisitors = visitsOverTime.reduce(
+          (sum, item) => sum + item.visits,
+          0
+        );
 
+        res.json({
+          totalVisitors,
+          visitsOverTime,
+        });
+      } catch (error) {
+        console.error("❌ Analytics error:", error);
+        res
+          .status(500)
+          .json({ error: "Error fetching analytics data", details: error.message });
+      }
+    });
+  } catch (err) {
+    console.error("❌ Error loading key.json:", err);
+  }
 } else {
-  console.warn("⚠ GA_KEY_JSON not found. Skipping analytics route.");
+  console.warn("⚠ Google Analytics key.json not found. Skipping analytics route.");
 }
-
 
 // ---------- ✅ WakaTime Summaries Route ----------
 const WAKATIME_API_KEY = process.env.WAKATIME_API_KEY;
-const base64Key = Buffer.from(WAKATIME_API_KEY).toString('base64');
-router.get('/wakatime', async (req, res) => {
+
+if (!WAKATIME_API_KEY) {
+  console.warn("⚠ WAKATIME_API_KEY not set. WakaTime route will not work.");
+} else {
+  const base64Key = Buffer.from(WAKATIME_API_KEY).toString("base64");
+
+  router.get("/api/wakatime", async (req, res) => {
     try {
-        const response = await fetch('https://wakatime.com/api/v1/users/current/summaries?range=last_7_days', {
-            headers: {
-                'Authorization': `Basic ${base64Key}`
-            }
-        });
-
-        if (!response.ok) {
-            return res.status(response.status).json({ error: 'Failed to fetch WakaTime data' });
+      const response = await fetch(
+        "https://wakatime.com/api/v1/users/current/summaries?range=last_7_days",
+        {
+          headers: {
+            Authorization: `Basic ${base64Key}`,
+          },
         }
+      );
 
-        const data = await response.json();
-        res.json(data);
+      if (!response.ok) {
+        return res
+          .status(response.status)
+          .json({ error: "Failed to fetch WakaTime data" });
+      }
+
+      const data = await response.json();
+      res.json(data);
     } catch (err) {
-        res.status(500).json({ error: 'Server error', details: err.message });
+      console.error("❌ WakaTime fetch error:", err);
+      res.status(500).json({ error: "Server error", details: err.message });
     }
-});
-
+  });
+}
 
 // ---------- ✅ Start the Server ----------
 
