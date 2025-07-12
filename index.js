@@ -75,11 +75,10 @@ router.post("/contact", (req, res) => {
 
 // ---------- ✅ Google Analytics API ----------
 
-const keyPath = path.join(__dirname, "key.json");
 let analyticsDataClient;
 
-if (fs.existsSync(keyPath)) {
-  const key = require("./key.json");
+if (process.env.GA_KEY_JSON) {
+  const key = JSON.parse(process.env.GA_KEY_JSON);
 
   analyticsDataClient = new BetaAnalyticsDataClient({
     credentials: key,
@@ -121,9 +120,11 @@ if (fs.existsSync(keyPath)) {
         .json({ error: "Error fetching analytics data", details: error.message });
     }
   });
+
 } else {
-  console.warn("⚠ Google Analytics key.json not found. Skipping analytics route.");
+  console.warn("⚠ GA_KEY_JSON not found. Skipping analytics route.");
 }
+
 
 // ---------- ✅ WakaTime Summaries Route ----------
 const WAKATIME_API_KEY = process.env.WAKATIME_API_KEY;
